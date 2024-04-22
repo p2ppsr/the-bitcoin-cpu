@@ -1,6 +1,4 @@
-# The Bitcoin CPU
-
-Execute code with the Everett CPU architecure on Bitcoin.
+![](/public/BitcoinCPU.png)
 
 ## Overview
 
