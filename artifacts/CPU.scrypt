@@ -1,0 +1,1903 @@
+import "../node_modules/scrypt-ts-lib/artifacts/blockchain.scrypt";import "../node_modules/scrypt-ts-lib/artifacts/merklePath.scrypt";
+
+contract CPU {
+  @state int isBeingSolved;
+  @state PubKey currentSolver;
+  @state int bountyMultiplier;
+  @state int timeUntilStaleSolution;
+  @state HashedMap<int,int> heap;
+  VarIntReader __scrypt_ts_accessPathReaderForProp__heap;
+  @state HashedMap<int,int> initialHeap;
+  VarIntReader __scrypt_ts_accessPathReaderForProp__initialHeap;
+  @state HashedMap<int,int> stack;
+  VarIntReader __scrypt_ts_accessPathReaderForProp__stack;
+  @state HashedMap<int,int> initialStack;
+  VarIntReader __scrypt_ts_accessPathReaderForProp__initialStack;
+  @state HashedMap<int,int> callStack;
+  VarIntReader __scrypt_ts_accessPathReaderForProp__callStack;
+  @state HashedMap<int,int> initialCallStack;
+  VarIntReader __scrypt_ts_accessPathReaderForProp__initialCallStack;
+  @state int callStackPointer;
+  @state int initialCallStackPointer;
+  @state int stackPointer;
+  @state int initialStackPointer;
+  @state int basePointer;
+  @state int initialBasePointer;
+  @state int executionPointer;
+  @state int initialExecutionPointer;
+  @state int r1;
+  @state int r2;
+  @state int r3;
+  @state int r4;
+  @state int initialR1;
+  @state int initialR2;
+  @state int initialR3;
+  @state int initialR4;
+  bytes __scrypt_ts_ctx_hashoutputs;
+  int __scrypt_ts_ctx_locktime;
+  int __scrypt_ts_ctx_sequence;
+  bytes __scrypt_ts_ctx_outpoint_txid;
+  int __scrypt_ts_ctx_outpoint_outputindex;
+  int __scrypt_ts_ctx_value;
+  constructor(HashedMap<int,int> memory, HashedMap<int,int> stack, HashedMap<int,int> callStack) {
+    this.isBeingSolved = 0;
+    this.currentSolver = PubKey("deadbeef");
+    this.bountyMultiplier = 2;
+    this.timeUntilStaleSolution = 0;
+    this.heap = memory;
+    this.initialHeap = memory;
+    this.executionPointer = 0;
+    this.initialExecutionPointer = 0;
+    this.stackPointer = 0;
+    this.initialStackPointer = 0;
+    this.callStackPointer = 0;
+    this.initialCallStackPointer = 0;
+    this.basePointer = 0;
+    this.initialBasePointer = 0;
+    stack.clear();
+    this.stack = stack;
+    this.initialStack = stack;
+    callStack.clear();
+    this.callStack = callStack;
+    this.initialCallStack = callStack;
+    this.callStackPointer = 0;
+    this.r1 = 0;
+    this.r2 = 0;
+    this.r3 = 0;
+    this.r4 = 0;
+    this.initialR1 = 0;
+    this.initialR2 = 0;
+    this.initialR3 = 0;
+    this.initialR4 = 0;
+  }
+  public function increaseBounty(int amount, SigHashPreimage __scrypt_ts_txPreimage) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    require(this.isBeingSolved == 0);
+    require(amount > 0);
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value + amount);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  public function startSolving(PubKey solver, Sig sig, int currentBlockHeight, SigHashPreimage __scrypt_ts_txPreimage) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    require(currentBlockHeight > 750000 && currentBlockHeight < 500000000);
+    require(this.isBeingSolved == 0);
+    require(checkSig(sig, solver));
+    this.solutionHelper(solver, currentBlockHeight);
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value * this.bountyMultiplier);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function solutionHelper(PubKey solver, int currentBlockHeight) : bool {
+    this.currentSolver = solver;
+    this.timeUntilStaleSolution = currentBlockHeight + 4;
+    this.isBeingSolved = 1;
+    return true;
+  }
+  public function recoverFromFailedSolution(PubKey solver, Sig sig, int currentBlockHeight, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__stack, bytes __scrypt_ts_accessPathForProp__initialStack, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__initialHeap, bytes __scrypt_ts_accessPathForProp__callStack, bytes __scrypt_ts_accessPathForProp__initialCallStack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__stack = new VarIntReader(__scrypt_ts_accessPathForProp__stack);
+    this.__scrypt_ts_accessPathReaderForProp__initialStack = new VarIntReader(__scrypt_ts_accessPathForProp__initialStack);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__initialHeap = new VarIntReader(__scrypt_ts_accessPathForProp__initialHeap);
+    this.__scrypt_ts_accessPathReaderForProp__callStack = new VarIntReader(__scrypt_ts_accessPathForProp__callStack);
+    this.__scrypt_ts_accessPathReaderForProp__initialCallStack = new VarIntReader(__scrypt_ts_accessPathForProp__initialCallStack);
+    require(currentBlockHeight > 750000 && currentBlockHeight < 500000000);
+    require(this.isBeingSolved == 1);
+    require(checkSig(sig, solver));
+    require(this.timeLock(this.timeUntilStaleSolution));
+    this.solutionHelper(solver, currentBlockHeight);
+    this.resetState();
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value * this.bountyMultiplier);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function resetState() : bool {
+    this.stack = this.initialStack;
+    this.stackPointer = this.initialStackPointer;
+    this.heap = this.initialHeap;
+    this.executionPointer = this.initialExecutionPointer;
+    this.basePointer = this.initialBasePointer;
+    this.r1 = this.initialR1;
+    this.r2 = this.initialR2;
+    this.r3 = this.initialR3;
+    this.r4 = this.initialR4;
+    this.callStack = this.initialCallStack;
+    this.callStackPointer = this.initialCallStackPointer;
+    return true;
+  }
+  public function add(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 1);
+    this.r3 = this.r1 + this.r2;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function addHelper() : bool {
+    this.r3 = this.r1 + this.r2;
+    this.executionPointer++;
+    return true;
+  }
+  public function sub(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 2);
+    this.r3 = this.r1 - this.r2;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function subHelper() : bool {
+    this.r3 = this.r1 - this.r2;
+    this.executionPointer++;
+    return true;
+  }
+  public function mul(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 3);
+    this.r3 = this.r1 * this.r2;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function mulHelper() : bool {
+    this.r3 = this.r1 * this.r2;
+    this.executionPointer++;
+    return true;
+  }
+  public function div(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 4);
+    this.r3 = this.r1 / this.r2;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function divHelper() : bool {
+    this.r3 = this.r1 / this.r2;
+    this.executionPointer++;
+    return true;
+  }
+  public function mod(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 5);
+    this.r3 = this.r1 % this.r2;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function modHelper() : bool {
+    this.r3 = this.r1 % this.r2;
+    this.executionPointer++;
+    return true;
+  }
+  public function length(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 7);
+    this.r2 = len(pack(this.r1));
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function lengthHelper() : bool {
+    this.r2 = len(pack(this.r1));
+    this.executionPointer++;
+    return true;
+  }
+  public function split(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 8);
+    bytes str = pack(this.r1);
+    this.r3 = unpack(str[0 : this.r2]);
+    this.r4 = unpack(str[this.r2 : len(str)]);
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function splitHelper() : bool {
+    bytes str = pack(this.r1);
+    this.r3 = unpack(str[0 : this.r2]);
+    this.r4 = unpack(str[this.r2 : len(str)]);
+    this.executionPointer++;
+    return true;
+  }
+  public function cat(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 9);
+    this.r3 = unpack(pack(this.r1) + pack(this.r2));
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function catHelper() : bool {
+    this.r3 = unpack(pack(this.r1) + pack(this.r2));
+    this.executionPointer++;
+    return true;
+  }
+  public function loadImmediate1(int currentInstruction, int value, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(this.heap.canGet({this.executionPointer + 1, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, value));
+    require(currentInstruction == 11);
+    this.r1 = value;
+    this.executionPointer += 2;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function loadImmediate1Helper(int value) : bool {
+    this.r1 = value;
+    this.executionPointer += 2;
+    return true;
+  }
+  public function loadImmediate2(int currentInstruction, int value, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(this.heap.canGet({this.executionPointer + 1, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, value));
+    require(currentInstruction == 12);
+    this.r2 = value;
+    this.executionPointer += 2;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function loadImmediate2Helper(int value) : bool {
+    this.r2 = value;
+    this.executionPointer += 2;
+    return true;
+  }
+  public function loadImmediate3(int currentInstruction, int value, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(this.heap.canGet({this.executionPointer + 1, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, value));
+    require(currentInstruction == 13);
+    this.r3 = value;
+    this.executionPointer += 2;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function loadImmediate3Helper(int value) : bool {
+    this.r3 = value;
+    this.executionPointer += 2;
+    return true;
+  }
+  public function loadImmediate4(int currentInstruction, int value, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(this.heap.canGet({this.executionPointer + 1, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, value));
+    require(currentInstruction == 14);
+    this.r4 = value;
+    this.executionPointer += 2;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function loadImmediate4Helper(int value) : bool {
+    this.r4 = value;
+    this.executionPointer += 2;
+    return true;
+  }
+  public function pushImmediate(int currentInstruction, int value, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__stack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__stack = new VarIntReader(__scrypt_ts_accessPathForProp__stack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(this.heap.canGet({this.executionPointer + 1, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, value));
+    require(currentInstruction == 80);
+    require(this.stack.set({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, value));
+    this.stackPointer++;
+    this.executionPointer += 2;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function pushImmediateHelper(int value) : bool {
+    require(this.stack.set({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, value));
+    this.stackPointer++;
+    this.executionPointer += 2;
+    return true;
+  }
+  public function loadMem(int currentInstruction, int value, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 10);
+    require(this.heap.canGet({this.r2, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, value));
+    this.r1 = value;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function loadMemHelper(int value) : bool {
+    this.r1 = value;
+    this.executionPointer++;
+    return true;
+  }
+  public function store(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 19);
+    require(this.heap.set({this.r1, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, this.r2));
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function storeHelper() : bool {
+    require(this.heap.set({this.r1, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, this.r2));
+    this.executionPointer++;
+    return true;
+  }
+  public function print(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 17);
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function printHelper() : bool {
+    this.executionPointer++;
+    return true;
+  }
+  public function read(int currentInstruction, int value, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 18);
+    this.r1 = value;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function readHelper(int value) : bool {
+    this.r1 = value;
+    this.executionPointer++;
+    return true;
+  }
+  public function jzr(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 21);
+    if(this.r2 == 0) {
+        this.executionPointer = this.r1;
+      } else {
+        this.executionPointer++;
+      }
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function jzrHelper() : bool {
+    if(this.r2 == 0) {
+        this.executionPointer = this.r1;
+      } else {
+        this.executionPointer++;
+      }
+    return true;
+  }
+  public function jmp(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 20);
+    this.executionPointer = this.r1;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function jmpHelper() : bool {
+    this.executionPointer = this.r1;
+    return true;
+  }
+  public function mov12(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 112);
+    this.r2 = this.r1;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  public function mov13(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 113);
+    this.r3 = this.r1;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  public function mov14(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 114);
+    this.r4 = this.r1;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  public function mov21(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 121);
+    this.r1 = this.r2;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  public function mov23(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 123);
+    this.r3 = this.r2;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  public function mov24(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 124);
+    this.r4 = this.r2;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  public function mov31(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 131);
+    this.r1 = this.r3;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  public function mov32(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 132);
+    this.r2 = this.r3;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  public function mov34(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 134);
+    this.r4 = this.r3;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  public function mov41(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 141);
+    this.r4 = this.r1;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  public function mov42(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 142);
+    this.r4 = this.r2;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  public function mov43(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 143);
+    this.r3 = this.r4;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function mov1Helper(int value) : bool {
+    this.r1 = value;
+    this.executionPointer++;
+    return true;
+  }
+  function mov2Helper(int value) : bool {
+    this.r2 = value;
+    this.executionPointer++;
+    return true;
+  }
+  function mov3Helper(int value) : bool {
+    this.r3 = value;
+    this.executionPointer++;
+    return true;
+  }
+  function mov4Helper(int value) : bool {
+    this.r4 = value;
+    this.executionPointer++;
+    return true;
+  }
+  public function win(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c2')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 49);
+  }
+  public function jnz(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 22);
+    if(this.r2 != 0) {
+        this.executionPointer = this.r1;
+      } else {
+        this.executionPointer++;
+      }
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function jnzHelper() : bool {
+    if(this.r2 != 0) {
+        this.executionPointer = this.r1;
+      } else {
+        this.executionPointer++;
+      }
+    return true;
+  }
+  public function jsr(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__callStack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__callStack = new VarIntReader(__scrypt_ts_accessPathForProp__callStack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 31);
+    require(this.callStack.set({this.callStackPointer, this.__scrypt_ts_accessPathReaderForProp__callStack.readInt()}, this.executionPointer));
+    this.callStackPointer++;
+    this.executionPointer = this.r1;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function jsrHelper() : bool {
+    require(this.callStack.set({this.callStackPointer, this.__scrypt_ts_accessPathReaderForProp__callStack.readInt()}, this.executionPointer));
+    this.callStackPointer++;
+    this.executionPointer = this.r1;
+    return true;
+  }
+  public function rsr(int currentInstruction, int returnAddress, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__callStack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__callStack = new VarIntReader(__scrypt_ts_accessPathForProp__callStack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 38);
+    this.callStackPointer--;
+    require(this.callStack.canGet({this.callStackPointer, this.__scrypt_ts_accessPathReaderForProp__callStack.readInt()}, returnAddress));
+    this.executionPointer = returnAddress + 1;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function rsrHelper(int returnAddress) : bool {
+    this.executionPointer = returnAddress + 1;
+    this.callStackPointer--;
+    return true;
+  }
+  public function jsz(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__callStack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__callStack = new VarIntReader(__scrypt_ts_accessPathForProp__callStack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 32);
+    if(this.r2 == 0) {
+        require(this.callStack.set({this.callStackPointer, this.__scrypt_ts_accessPathReaderForProp__callStack.readInt()}, this.executionPointer));
+        this.callStackPointer++;
+        this.executionPointer = this.r1;
+      } else {
+        this.executionPointer++;
+      }
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function jszHelper() : bool {
+    if(this.r2 == 0) {
+        require(this.callStack.set({this.callStackPointer, this.__scrypt_ts_accessPathReaderForProp__callStack.readInt()}, this.executionPointer));
+        this.callStackPointer++;
+        this.executionPointer = this.r1;
+      } else {
+        this.executionPointer++;
+      }
+    return true;
+  }
+  public function jsnz(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__callStack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__callStack = new VarIntReader(__scrypt_ts_accessPathForProp__callStack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 33);
+    if(this.r2 != 0) {
+        require(this.callStack.set({this.callStackPointer, this.__scrypt_ts_accessPathReaderForProp__callStack.readInt()}, this.executionPointer));
+        this.callStackPointer++;
+        this.executionPointer = this.r1;
+      } else {
+        this.executionPointer++;
+      }
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function jsnzHelper() : bool {
+    if(this.r2 != 0) {
+        require(this.callStack.set({this.callStackPointer, this.__scrypt_ts_accessPathReaderForProp__callStack.readInt()}, this.executionPointer));
+        this.callStackPointer++;
+        this.executionPointer = this.r1;
+      } else {
+        this.executionPointer++;
+      }
+    return true;
+  }
+  public function jeq(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 23);
+    if(this.r2 == this.r3) {
+        this.executionPointer = this.r1;
+      } else {
+        this.executionPointer++;
+      }
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function jeqHelper() : bool {
+    if(this.r2 == this.r3) {
+        this.executionPointer = this.r1;
+      } else {
+        this.executionPointer++;
+      }
+    return true;
+  }
+  public function jne(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 24);
+    if(this.r2 != this.r3) {
+        this.executionPointer = this.r1;
+      } else {
+        this.executionPointer++;
+      }
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function jneHelper() : bool {
+    if(this.r2 != this.r3) {
+        this.executionPointer = this.r1;
+      } else {
+        this.executionPointer++;
+      }
+    return true;
+  }
+  public function checkpoint(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__initialHeap, bytes __scrypt_ts_accessPathForProp__initialStack, bytes __scrypt_ts_accessPathForProp__stack, bytes __scrypt_ts_accessPathForProp__initialCallStack, bytes __scrypt_ts_accessPathForProp__callStack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__initialHeap = new VarIntReader(__scrypt_ts_accessPathForProp__initialHeap);
+    this.__scrypt_ts_accessPathReaderForProp__initialStack = new VarIntReader(__scrypt_ts_accessPathForProp__initialStack);
+    this.__scrypt_ts_accessPathReaderForProp__stack = new VarIntReader(__scrypt_ts_accessPathForProp__stack);
+    this.__scrypt_ts_accessPathReaderForProp__initialCallStack = new VarIntReader(__scrypt_ts_accessPathForProp__initialCallStack);
+    this.__scrypt_ts_accessPathReaderForProp__callStack = new VarIntReader(__scrypt_ts_accessPathForProp__callStack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 40);
+    this.executionPointer++;
+    this.initialHeap = this.heap;
+    this.initialStack = this.stack;
+    this.initialBasePointer = this.basePointer;
+    this.initialStackPointer = this.stackPointer;
+    this.initialExecutionPointer = this.executionPointer;
+    this.initialR1 = this.r1;
+    this.initialR2 = this.r2;
+    this.initialR3 = this.r3;
+    this.initialR4 = this.r4;
+    this.initialCallStack = this.callStack;
+    this.initialCallStackPointer = this.callStackPointer;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function checkpointHelper() : bool {
+    this.executionPointer++;
+    this.initialHeap = this.heap;
+    this.initialStack = this.stack;
+    this.initialBasePointer = this.basePointer;
+    this.initialStackPointer = this.stackPointer;
+    this.initialExecutionPointer = this.executionPointer;
+    this.initialR1 = this.r1;
+    this.initialR2 = this.r2;
+    this.initialR3 = this.r3;
+    this.initialR4 = this.r4;
+    this.initialCallStack = this.callStack;
+    this.initialCallStackPointer = this.callStackPointer;
+    return true;
+  }
+  public function amount(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 41);
+    this.r1 = this.__scrypt_ts_ctx_value;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function amountHelper() : bool {
+    this.r1 = this.__scrypt_ts_ctx_value;
+    this.executionPointer++;
+    return true;
+  }
+  public function pay(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c1')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 42);
+    this.executionPointer++;
+    bytes outputs = this.buildStateOutput(this.__scrypt_ts_ctx_value - this.r1) + Utils.buildOutput(pack(this.r2), this.r1);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(outputs));
+  }
+  function payHelper() : bool {
+    this.executionPointer++;
+    return true;
+  }
+  public function bill(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 43);
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value + this.r1);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function billHelper() : bool {
+    this.executionPointer++;
+    return true;
+  }
+  public function payBill(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c1')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 44);
+    this.executionPointer++;
+    bytes outputs = this.buildStateOutput(this.__scrypt_ts_ctx_value) + Utils.buildOutput(pack(this.r2), this.r1);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(outputs));
+  }
+  function payBillHelper() : bool {
+    this.executionPointer++;
+    return true;
+  }
+  public function payAny(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 45);
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value - this.r1);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function payAnyHelper() : bool {
+    this.executionPointer++;
+    return true;
+  }
+  public function random(int currentInstruction, BlockHeader bh, Node[32] merkleproof, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 58);
+    Sha256 prevTxid = Sha256(this.__scrypt_ts_ctx_outpoint_txid);
+    require(Blockchain.isValidBlockHeader(bh, 500000000));
+    require(Blockchain.txInBlock(prevTxid, bh, merkleproof, 32));
+    this.r1 = unpack(sha256(this.__scrypt_ts_ctx_outpoint_txid + pack(this.__scrypt_ts_ctx_outpoint_outputindex) + pack(bh.nonce)));
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function randomHelper1(BlockHeader bh) : bool {
+    this.r1 = unpack(sha256(this.__scrypt_ts_ctx_outpoint_txid + pack(this.__scrypt_ts_ctx_outpoint_outputindex) + pack((bh).nonce)));
+    this.executionPointer++;
+    return true;
+  }
+  function randomHelper2(int val) : bool {
+    this.r1 = val;
+    this.executionPointer++;
+    return true;
+  }
+  public function sha256(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 50);
+    this.r2 = unpack(sha256(pack(this.r1)));
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function sha256Helper() : bool {
+    this.r2 = unpack(sha256(pack(this.r1)));
+    this.executionPointer++;
+    return true;
+  }
+  public function hash256(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 51);
+    this.r2 = unpack(hash256(pack(this.r1)));
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function hash256Helper() : bool {
+    this.r2 = unpack(hash256(pack(this.r1)));
+    this.executionPointer++;
+    return true;
+  }
+  public function ripemd160(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 52);
+    this.r2 = unpack(ripemd160(pack(this.r1)));
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function ripemd160Helper() : bool {
+    this.r2 = unpack(ripemd160(pack(this.r1)));
+    this.executionPointer++;
+    return true;
+  }
+  public function hash160(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 53);
+    this.r2 = unpack(hash160(pack(this.r1)));
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function hash160Helper() : bool {
+    this.r2 = unpack(hash160(pack(this.r1)));
+    this.executionPointer++;
+    return true;
+  }
+  public function sha1(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 54);
+    this.r2 = unpack(sha1(pack(this.r1)));
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function sha1Helper() : bool {
+    this.r2 = unpack(sha1(pack(this.r1)));
+    this.executionPointer++;
+    return true;
+  }
+  public function nop(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 0);
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function nopHelper() : bool {
+    this.executionPointer++;
+    return true;
+  }
+  public function negate(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 60);
+    this.r1 *= -1;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function negateHelper() : bool {
+    this.r1 *= -1;
+    this.executionPointer++;
+    return true;
+  }
+  public function and(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 61);
+    this.r3 = (this.r1 & this.r2);
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function andHelper() : bool {
+    this.r3 = (this.r1 & this.r2);
+    this.executionPointer++;
+    return true;
+  }
+  public function or(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 62);
+    this.r3 = (this.r1 | this.r2);
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function orHelper() : bool {
+    this.r3 = (this.r1 | this.r2);
+    this.executionPointer++;
+    return true;
+  }
+  public function xor(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 63);
+    this.r3 = (this.r1 ^ this.r2);
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function xorHelper() : bool {
+    this.r3 = (this.r1 ^ this.r2);
+    this.executionPointer++;
+    return true;
+  }
+  public function equal(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 64);
+    this.r3 = this.r1 == this.r2 ? 1 : 0;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function equalHelper() : bool {
+    this.r3 = this.r1 == this.r2 ? 1 : 0;
+    this.executionPointer++;
+    return true;
+  }
+  public function abs(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 65);
+    this.r2 = abs(this.r1);
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function absHelper() : bool {
+    this.r2 = abs(this.r1);
+    this.executionPointer++;
+    return true;
+  }
+  public function notEqual(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 66);
+    this.r3 = this.r1 == this.r2 ? 0 : 1;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function notEqualHelper() : bool {
+    this.r3 = this.r1 == this.r2 ? 0 : 1;
+    this.executionPointer++;
+    return true;
+  }
+  public function lshift(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 67);
+    this.r3 = (this.r1 << this.r2);
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function lshiftHelper() : bool {
+    this.r3 = (this.r1 << this.r2);
+    this.executionPointer++;
+    return true;
+  }
+  public function rshift(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 68);
+    this.r3 = (this.r1 >> this.r2);
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function rshiftHelper() : bool {
+    this.r3 = (this.r1 >> this.r2);
+    this.executionPointer++;
+    return true;
+  }
+  public function lessThan(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 70);
+    this.r3 = this.r1 < this.r2 ? 1 : 0;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function lessThanHelper() : bool {
+    this.r3 = this.r1 < this.r2 ? 1 : 0;
+    this.executionPointer++;
+    return true;
+  }
+  public function greaterThan(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 71);
+    this.r3 = this.r1 > this.r2 ? 1 : 0;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function greaterThanHelper() : bool {
+    this.r3 = this.r1 > this.r2 ? 1 : 0;
+    this.executionPointer++;
+    return true;
+  }
+  public function lessThanOrEqual(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 72);
+    this.r3 = this.r1 <= this.r2 ? 1 : 0;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function lessThanOrEqualHelper() : bool {
+    this.r3 = this.r1 <= this.r2 ? 1 : 0;
+    this.executionPointer++;
+    return true;
+  }
+  public function greaterThanOrEqual(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 73);
+    this.r3 = this.r1 >= this.r2 ? 1 : 0;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function greaterThanOrEqualHelper() : bool {
+    this.r3 = this.r1 >= this.r2 ? 1 : 0;
+    this.executionPointer++;
+    return true;
+  }
+  public function min(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 74);
+    this.r3 = min(this.r1, this.r2);
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function minHelper() : bool {
+    this.r3 = min(this.r1, this.r2);
+    this.executionPointer++;
+    return true;
+  }
+  public function max(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 75);
+    this.r3 = max(this.r1, this.r2);
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function maxHelper() : bool {
+    this.r3 = max(this.r1, this.r2);
+    this.executionPointer++;
+    return true;
+  }
+  public function within(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 76);
+    this.r3 = within(this.r4, this.r1, this.r2) ? 1 : 0;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function withinHelper() : bool {
+    this.r3 = within(this.r4, this.r1, this.r2) ? 1 : 0;
+    this.executionPointer++;
+    return true;
+  }
+  public function push1(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__stack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__stack = new VarIntReader(__scrypt_ts_accessPathForProp__stack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 81);
+    require(this.stack.set({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, this.r1));
+    this.stackPointer++;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function push1Helper() : bool {
+    require(this.stack.set({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, this.r1));
+    this.stackPointer++;
+    this.executionPointer++;
+    return true;
+  }
+  public function pop1(int currentInstruction, int value, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__stack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__stack = new VarIntReader(__scrypt_ts_accessPathForProp__stack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 91);
+    this.stackPointer--;
+    require(this.stack.canGet({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, value));
+    this.r1 = value;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function pop1Helper(int value) : bool {
+    this.r1 = value;
+    this.stackPointer--;
+    this.executionPointer++;
+    return true;
+  }
+  public function push2(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__stack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__stack = new VarIntReader(__scrypt_ts_accessPathForProp__stack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 82);
+    require(this.stack.set({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, this.r2));
+    this.stackPointer++;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function push2Helper() : bool {
+    require(this.stack.set({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, this.r2));
+    this.stackPointer++;
+    this.executionPointer++;
+    return true;
+  }
+  public function pop2(int currentInstruction, int value, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__stack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__stack = new VarIntReader(__scrypt_ts_accessPathForProp__stack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 92);
+    this.stackPointer--;
+    require(this.stack.canGet({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, value));
+    this.r2 = value;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function pop2Helper(int value) : bool {
+    this.r2 = value;
+    this.stackPointer--;
+    this.executionPointer++;
+    return true;
+  }
+  public function push3(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__stack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__stack = new VarIntReader(__scrypt_ts_accessPathForProp__stack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 83);
+    require(this.stack.set({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, this.r3));
+    this.stackPointer++;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function push3Helper() : bool {
+    require(this.stack.set({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, this.r3));
+    this.stackPointer++;
+    this.executionPointer++;
+    return true;
+  }
+  public function pop3(int currentInstruction, int value, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__stack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__stack = new VarIntReader(__scrypt_ts_accessPathForProp__stack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 93);
+    this.stackPointer--;
+    require(this.stack.canGet({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, value));
+    this.r3 = value;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function pop3Helper(int value) : bool {
+    this.r3 = value;
+    this.stackPointer--;
+    this.executionPointer++;
+    return true;
+  }
+  public function push4(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__stack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__stack = new VarIntReader(__scrypt_ts_accessPathForProp__stack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 84);
+    require(this.stack.set({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, this.r4));
+    this.stackPointer++;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function push4Helper() : bool {
+    require(this.stack.set({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, this.r4));
+    this.stackPointer++;
+    this.executionPointer++;
+    return true;
+  }
+  public function pop4(int currentInstruction, int value, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__stack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__stack = new VarIntReader(__scrypt_ts_accessPathForProp__stack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 94);
+    this.stackPointer--;
+    require(this.stack.canGet({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, value));
+    this.r4 = value;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function pop4Helper(int value) : bool {
+    this.r4 = value;
+    this.stackPointer--;
+    this.executionPointer++;
+    return true;
+  }
+  public function dup(int currentInstruction, int value, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__stack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__stack = new VarIntReader(__scrypt_ts_accessPathForProp__stack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 89);
+    require(this.stack.canGet({this.stackPointer - 1, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, value));
+    require(this.stack.set({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, value));
+    this.stackPointer++;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function dupHelper(int value) : bool {
+    require(this.stack.set({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, value));
+    this.stackPointer++;
+    this.executionPointer++;
+    return true;
+  }
+  public function drop(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 90);
+    this.stackPointer--;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function dropHelper() : bool {
+    this.stackPointer--;
+    this.executionPointer++;
+    return true;
+  }
+  public function setBase(int currentInstruction, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__stack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__stack = new VarIntReader(__scrypt_ts_accessPathForProp__stack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 30);
+    require(this.stack.set({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, this.basePointer));
+    this.stackPointer++;
+    this.basePointer = this.stackPointer;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function setBaseHelper() : bool {
+    require(this.stack.set({this.stackPointer, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, this.basePointer));
+    this.stackPointer++;
+    this.basePointer = this.stackPointer;
+    this.executionPointer++;
+    return true;
+  }
+  public function clearBase(int currentInstruction, int oldBase, SigHashPreimage __scrypt_ts_txPreimage, bytes __scrypt_ts_accessPathForProp__heap, bytes __scrypt_ts_accessPathForProp__stack) {
+    require(Tx.checkPreimageSigHashType(__scrypt_ts_txPreimage, SigHashType(b'c3')));
+    this.__scrypt_ts_ctx_hashoutputs = SigHash.hashOutputs(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_locktime = SigHash.nLocktime(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_sequence = SigHash.nSequence(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_ctx_outpoint_outputindex = unpack(SigHash.outpoint(__scrypt_ts_txPreimage)[32 :]);
+    this.__scrypt_ts_ctx_outpoint_txid = SigHash.outpoint(__scrypt_ts_txPreimage)[0:32];
+    this.__scrypt_ts_ctx_value = SigHash.value(__scrypt_ts_txPreimage);
+    this.__scrypt_ts_accessPathReaderForProp__heap = new VarIntReader(__scrypt_ts_accessPathForProp__heap);
+    this.__scrypt_ts_accessPathReaderForProp__stack = new VarIntReader(__scrypt_ts_accessPathForProp__stack);
+    require(this.heap.canGet({this.executionPointer, this.__scrypt_ts_accessPathReaderForProp__heap.readInt()}, currentInstruction));
+    require(currentInstruction == 39);
+    this.stackPointer = this.basePointer;
+    require(this.stack.canGet({this.stackPointer - 1, this.__scrypt_ts_accessPathReaderForProp__stack.readInt()}, oldBase));
+    this.basePointer = oldBase;
+    this.stackPointer--;
+    this.executionPointer++;
+    bytes output = this.buildStateOutput(this.__scrypt_ts_ctx_value);
+    require(this.__scrypt_ts_ctx_hashoutputs == hash256(output));
+  }
+  function clearBaseHelper(int oldBase) : bool {
+    this.stackPointer = this.basePointer;
+    this.basePointer = oldBase;
+    this.stackPointer--;
+    this.executionPointer++;
+    return true;
+  }
+  function timeLock(int locktime): bool {  bool res = true;  res = this.__scrypt_ts_ctx_sequence < 0xffffffff;  if (    locktime < 500000000  ) {    res = res && this.__scrypt_ts_ctx_locktime < 500000000;  }  return res && this.__scrypt_ts_ctx_locktime >= locktime;}
+  function buildStateOutput(int amount) : bytes {  return Utils.buildOutput(this.getStateScript(), amount);}
+}

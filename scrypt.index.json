@@ -1,0 +1,1 @@
+{"scryptBase":"artifacts","bindings":[{"symbol":"BlockHeader","path":"../node_modules/scrypt-ts-lib/artifacts/blockchain.scrypt"},{"symbol":"Node","path":"../node_modules/scrypt-ts-lib/artifacts/merklePath.scrypt"},{"symbol":"Blockchain","path":"../node_modules/scrypt-ts-lib/artifacts/blockchain.scrypt"},{"symbol":"CPU","path":"CPU.scrypt"}]}
