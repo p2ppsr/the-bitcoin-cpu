@@ -130,7 +130,8 @@ export default async (
             'callStack': currentCallStack,
             'initialCallStack': currentInitialCallStack
         }) as CPU
-        const mockResult = executeMockInstruction(mockCpu, executedOperations[i].op, executedOperations[i].value as bigint)
+        console.log('MOCK', executedOperations[i].op, executedOperations[i].value as bigint)
+        const mockResult = executeMockInstruction(mockCpu, executedOperations[i].op, executedOperations[i].value as bigint, true)
         mockCpu = mockResult.cpu
         const nextScript = mockCpu.lockingScript
         const unlockingScript = await cpu.getUnlockingScript(async (self) => {
@@ -147,6 +148,7 @@ export default async (
             }))
             self.to = { tx: bsvtx, inputIndex: 0 }
             self.from = { tx: parsedOfferTX, outputIndex: 0 }
+            console.log('STEP', executedOperations[i].op, executedOperations[i].value as bigint)
             executeRealInstruction(self, executedOperations[i].op, executedOperations[i].value as bigint)
         })
         currentTX = await createAction({

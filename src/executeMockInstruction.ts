@@ -1,7 +1,7 @@
 import CPU from './contracts/CPU'
 import { fromByteString, int2ByteString, byteString2Int, toByteString } from 'scrypt-ts'
 
-export default (cpu: CPU, instruction: bigint, overrideValue?: bigint): { cpu: CPU, value?: bigint | undefined } => {
+export default (cpu: CPU, instruction: bigint, overrideValue?: bigint, isMockingRealSend = false): { cpu: CPU, value?: bigint | undefined } => {
     let value: bigint | undefined = undefined
     let inputValue: bigint = 0n
     let promptResult: string | null = ''
@@ -63,15 +63,17 @@ export default (cpu: CPU, instruction: bigint, overrideValue?: bigint): { cpu: C
             // In an actual program, the application would give them special meaning
             // We assume all values less than 255 are integers
             // Larger values are assumed to be strings.
-            if (cpu.r1 <= 255n) {
-                alert(cpu.r1)
-            } else {
-                const bs = fromByteString(int2ByteString(cpu.r1))
-                alert(bs)
+            if (typeof overrideValue === 'undefined' && !isMockingRealSend) {
+                if (cpu.r1 <= 255n) {
+                    alert(cpu.r1)
+                } else {
+                    const bs = fromByteString(int2ByteString(cpu.r1))
+                    alert(bs)
+                }
             }
             break
         case CPU.OP_READ:
-            if (typeof overrideValue === 'undefined') {
+            if (typeof overrideValue === 'undefined' && !isMockingRealSend) {
                 promptResult = prompt('INPUT')
                 if (promptResult === null) {
                     promptResult = ''
@@ -83,7 +85,7 @@ export default (cpu: CPU, instruction: bigint, overrideValue?: bigint): { cpu: C
                 }
                 value = typeof overrideValue !== 'undefined' ? overrideValue : inputValue
             } else {
-                value = overrideValue
+                inputValue = overrideValue
             }
             cpu.readHelper(inputValue)
             break
