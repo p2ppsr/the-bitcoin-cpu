@@ -1,7 +1,7 @@
 import CPU from './contracts/CPU'
 import { fromByteString, int2ByteString, byteString2Int, toByteString } from 'scrypt-ts'
 
-export default (cpu: CPU, instruction: bigint): { cpu: CPU, value?: bigint | undefined } => {
+export default (cpu: CPU, instruction: bigint, overrideValue?: bigint): { cpu: CPU, value?: bigint | undefined } => {
     let value: bigint | undefined = undefined
     let inputValue: bigint = 0n
     let promptResult: string | null = ''
@@ -31,27 +31,27 @@ export default (cpu: CPU, instruction: bigint): { cpu: CPU, value?: bigint | und
             cpu.catHelper()
             break
         case CPU.OP_LOADIMMEDIATE1:
-            value = cpu.heap.get(cpu.executionPointer + 1n)
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.heap.get(cpu.executionPointer + 1n)
             cpu.loadImmediate1Helper(value)
             break
         case CPU.OP_LOADIMMEDIATE2:
-            value = cpu.heap.get(cpu.executionPointer + 1n)
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.heap.get(cpu.executionPointer + 1n)
             cpu.loadImmediate2Helper(value)
             break
         case CPU.OP_LOADIMMEDIATE3:
-            value = cpu.heap.get(cpu.executionPointer + 1n)
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.heap.get(cpu.executionPointer + 1n)
             cpu.loadImmediate3Helper(value)
             break
         case CPU.OP_LOADIMMEDIATE4:
-            value = cpu.heap.get(cpu.executionPointer + 1n)
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.heap.get(cpu.executionPointer + 1n)
             cpu.loadImmediate4Helper(value)
             break
         case CPU.OP_PUSHIMMEDIATE:
-            value = cpu.heap.get(cpu.executionPointer + 1n)
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.heap.get(cpu.executionPointer + 1n)
             cpu.pushImmediateHelper(value)
             break
         case CPU.OP_LOADMEM:
-            value = cpu.heap.get(cpu.r2)
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.heap.get(cpu.r2)
             cpu.loadMemHelper(value)
             break
         case CPU.OP_STORE:
@@ -71,16 +71,20 @@ export default (cpu: CPU, instruction: bigint): { cpu: CPU, value?: bigint | und
             }
             break
         case CPU.OP_READ:
-            promptResult = prompt('INPUT')
-            if (promptResult === null) {
-                promptResult = ''
+            if (typeof overrideValue === 'undefined') {
+                promptResult = prompt('INPUT')
+                if (promptResult === null) {
+                    promptResult = ''
+                }
+                try {
+                    inputValue = BigInt(promptResult)
+                } catch (e) {
+                    inputValue = byteString2Int(toByteString(promptResult, true))
+                }
+                value = typeof overrideValue !== 'undefined' ? overrideValue : inputValue
+            } else {
+                value = overrideValue
             }
-            try {
-                inputValue = BigInt(promptResult)
-            } catch (e) {
-                inputValue = byteString2Int(toByteString(promptResult, true))
-            }
-            value = inputValue
             cpu.readHelper(inputValue)
             break
         case CPU.OP_JZR:
@@ -96,51 +100,51 @@ export default (cpu: CPU, instruction: bigint): { cpu: CPU, value?: bigint | und
             alert('YOU LOSE')
             break
         case CPU.OP_MOV12:
-            value = cpu.r1
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.r1
             cpu.mov2Helper(value)
             break
         case CPU.OP_MOV13:
-            value = cpu.r1
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.r1
             cpu.mov3Helper(value)
             break
         case CPU.OP_MOV14:
-            value = cpu.r1
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.r1
             cpu.mov4Helper(value)
             break
         case CPU.OP_MOV21:
-            value = cpu.r2
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.r2
             cpu.mov1Helper(value)
             break
         case CPU.OP_MOV23:
-            value = cpu.r2
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.r2
             cpu.mov3Helper(value)
             break
         case CPU.OP_MOV24:
-            value = cpu.r2
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.r2
             cpu.mov4Helper(value)
             break
         case CPU.OP_MOV31:
-            value = cpu.r3
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.r3
             cpu.mov1Helper(value)
             break
         case CPU.OP_MOV32:
-            value = cpu.r3
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.r3
             cpu.mov2Helper(value)
             break
         case CPU.OP_MOV34:
-            value = cpu.r3
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.r3
             cpu.mov4Helper(value)
             break
         case CPU.OP_MOV41:
-            value = cpu.r4
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.r4
             cpu.mov1Helper(value)
             break
         case CPU.OP_MOV42:
-            value = cpu.r4
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.r4
             cpu.mov2Helper(value)
             break
         case CPU.OP_MOV43:
-            value = cpu.r4
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.r4
             cpu.mov3Helper(value)
             break
         case CPU.OP_JNZ:
@@ -150,7 +154,7 @@ export default (cpu: CPU, instruction: bigint): { cpu: CPU, value?: bigint | und
             cpu.jsrHelper()
             break
         case CPU.OP_RSR:
-            value = cpu.callStack.get(cpu.callStackPointer - 1n)
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.callStack.get(cpu.callStackPointer - 1n)
             cpu.rsrHelper(value)
             break
         case CPU.OP_JSZ:
@@ -260,12 +264,12 @@ export default (cpu: CPU, instruction: bigint): { cpu: CPU, value?: bigint | und
             cpu.push1Helper()
             break
         case CPU.OP_POP1:
-            value = cpu.stack.get(cpu.stackPointer - 1n)
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.stack.get(cpu.stackPointer - 1n)
             console.log(cpu.stack, cpu.stackPointer - 1n)
             cpu.pop1Helper(value)
             break
         case CPU.OP_DUP:
-            value = cpu.stack.get(cpu.stackPointer - 1n)
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.stack.get(cpu.stackPointer - 1n)
             cpu.dupHelper(value)
             break
         case CPU.OP_DROP:
@@ -275,28 +279,28 @@ export default (cpu: CPU, instruction: bigint): { cpu: CPU, value?: bigint | und
             cpu.setBaseHelper()
             break
         case CPU.OP_CLEARBASE:
-            value = cpu.stack.get(cpu.basePointer - 1n)
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.stack.get(cpu.basePointer - 1n)
             cpu.clearBaseHelper(value)
             break
         case CPU.OP_PUSH2:
             cpu.push2Helper()
             break
         case CPU.OP_POP2:
-            value = cpu.stack.get(cpu.stackPointer - 1n)
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.stack.get(cpu.stackPointer - 1n)
             cpu.pop2Helper(value)
             break
         case CPU.OP_PUSH3:
             cpu.push3Helper()
             break
         case CPU.OP_POP3:
-            value = cpu.stack.get(cpu.stackPointer - 1n)
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.stack.get(cpu.stackPointer - 1n)
             cpu.pop3Helper(value)
             break
         case CPU.OP_PUSH4:
             cpu.push4Helper()
             break
         case CPU.OP_POP4:
-            value = cpu.stack.get(cpu.stackPointer - 1n)
+            value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.stack.get(cpu.stackPointer - 1n)
             cpu.pop4Helper(value)
             break
         default:

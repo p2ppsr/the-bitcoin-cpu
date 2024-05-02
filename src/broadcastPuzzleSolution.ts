@@ -1,5 +1,6 @@
 import CPU from './contracts/CPU'
 import executeRealInstruction from './executeRealInstruction'
+import executeMockInstruction from './executeMockInstruction.ts'
 import { createAction, getHeight, createSignature, getPublicKey, CreateActionResult } from '@babbage/sdk-ts'
 import { PubKey, Sig, bsv, toByteString, HashedMap } from 'scrypt-ts'
 import { Transaction } from '@bsv/sdk'
@@ -110,7 +111,7 @@ export default async (
     let currentInitialCallStack = cpu.initialCallStack
 
     for (let i = 0; i < executedOperations.length; i++) {
-        const tx = Transaction.fromHex(currentTX.rawTx)
+        const tx = Transaction.fromHex(currentTX.rawTx as string)
         const parsedOfferTX = new bsv.Transaction(currentTX.rawTx)
         const lockingScript = tx.outputs[0].lockingScript.toHex()
         const cpu = CPU.fromLockingScript(lockingScript, {
@@ -129,7 +130,8 @@ export default async (
             'callStack': currentCallStack,
             'initialCallStack': currentInitialCallStack
         }) as CPU
-        mockCpu = executeRealInstruction(mockCpu, executedOperations[i].op, executedOperations[i].value as bigint)
+        const mockResult = executeMockInstruction(mockCpu, executedOperations[i].op, executedOperations[i].value as bigint)
+        mockCpu = mockResult.cpu
         const nextScript = mockCpu.lockingScript
         const unlockingScript = await cpu.getUnlockingScript(async (self) => {
             const bsvtx = new bsv.Transaction()
