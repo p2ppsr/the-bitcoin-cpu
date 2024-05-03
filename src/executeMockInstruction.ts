@@ -96,7 +96,9 @@ export default (cpu: CPU, instruction: bigint, overrideValue?: bigint, isMocking
             cpu.jmpHelper()
             break
         case CPU.OP_WIN:
-            alert('YOU WIN')
+            if (!isMockingRealSend) {
+                alert('YOU WIN')
+            }
             break
         case CPU.OP_LOSE:
             alert('YOU LOSE')
@@ -267,7 +269,6 @@ export default (cpu: CPU, instruction: bigint, overrideValue?: bigint, isMocking
             break
         case CPU.OP_POP1:
             value = typeof overrideValue !== 'undefined' ? overrideValue : cpu.stack.get(cpu.stackPointer - 1n)
-            console.log(cpu.stack, cpu.stackPointer - 1n)
             cpu.pop1Helper(value)
             break
         case CPU.OP_DUP:

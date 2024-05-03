@@ -110,7 +110,7 @@ export default async (
     let currentCallStack = cpu.callStack
     let currentInitialCallStack = cpu.initialCallStack
 
-    for (let i = 0; i < executedOperations.length; i++) {
+    for (let i = 0; i < executedOperations.length - 1; i++) {
         const tx = Transaction.fromHex(currentTX.rawTx as string)
         const parsedOfferTX = new bsv.Transaction(currentTX.rawTx)
         const lockingScript = tx.outputs[0].lockingScript.toHex()
@@ -130,7 +130,6 @@ export default async (
             'callStack': currentCallStack,
             'initialCallStack': currentInitialCallStack
         }) as CPU
-        console.log('MOCK', executedOperations[i].op, executedOperations[i].value as bigint)
         const mockResult = executeMockInstruction(mockCpu, executedOperations[i].op, executedOperations[i].value as bigint, true)
         mockCpu = mockResult.cpu
         const nextScript = mockCpu.lockingScript
@@ -148,13 +147,13 @@ export default async (
             }))
             self.to = { tx: bsvtx, inputIndex: 0 }
             self.from = { tx: parsedOfferTX, outputIndex: 0 }
-            console.log('STEP', executedOperations[i].op, executedOperations[i].value as bigint)
             executeRealInstruction(self, executedOperations[i].op, executedOperations[i].value as bigint)
         })
         currentTX = await createAction({
             inputs: {
-                [currentTX.txid]: {
+                [currentTX.txid as string]: {
                     ...verifyTruthy(currentTX),
+                    rawTx: currentTX.rawTx as string,
                     outputsToRedeem: [{
                         index: 0,
                         unlockingScript: unlockingScript.toHex()
@@ -177,10 +176,10 @@ export default async (
         currentInitialCallStack = cpu.initialCallStack
     }
     // claim winnings
-    const preWinTX = Transaction.fromHex(currentTX.rawTx)
+    const preWinTX = Transaction.fromHex(currentTX.rawTx as string)
     const parsedPreWinTX = new bsv.Transaction(currentTX.rawTx)
     const preWinLockingScript = preWinTX.outputs[0].lockingScript.toHex()
-    const preWinCPU = CPU.fromLockingScript(lockingScript, {
+    const preWinCPU = CPU.fromLockingScript(preWinLockingScript, {
         'heap': currentHeap,
         'stack': currentStack,
         'initialHeap': currentInitialHeap,
@@ -191,7 +190,7 @@ export default async (
     const winScript = await preWinCPU.getUnlockingScript(async (self) => {
         const bsvtx = new bsv.Transaction()
         bsvtx.from({
-            txId: currentTX.txid,
+            txId: currentTX.txid as string,
             outputIndex: 0,
             script: preWinLockingScript,
             satoshis: preWinTX.outputs[0].satoshis as number
@@ -200,10 +199,11 @@ export default async (
         self.from = { tx: parsedPreWinTX, outputIndex: 0 }
         self.win(CPU.OP_WIN)
     })
-    const winTX = await createAction({
+    await createAction({
         inputs: {
-            [currentTX.txid]: {
+            [currentTX.txid as string]: {
                 ...verifyTruthy(currentTX),
+                rawTx: currentTX.rawTx as string,
                 outputsToRedeem: [{
                     index: 0,
                     unlockingScript: winScript.toHex()
@@ -213,5 +213,5 @@ export default async (
         description: `Finish solving a puzzle`,
         acceptDelayedBroadcast: false
     })
-    console.log('CPU Puzzle is Solved and Unlocked!!!', winTX)
+    alert('CPU Puzzle is Solved and Unlocked! The bounty is returned to your MetaNet Client.')
 }

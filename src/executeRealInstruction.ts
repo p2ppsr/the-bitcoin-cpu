@@ -60,6 +60,7 @@ export default (c: CPU, i: bigint, v: bigint): CPU => {
             c.jmp(i)
             break
         case CPU.OP_WIN:
+            c.win(i)
             break
         case CPU.OP_LOSE:
             break

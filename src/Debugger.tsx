@@ -130,7 +130,7 @@ export default function App() {
   const executeInstruction = (originalCPU: CPU) => {
     const instruction = originalCPU.heap.get(originalCPU.executionPointer)
     const { value, cpu } = executeMockInstruction(originalCPU, instruction)
-    if (instruction === CPU.OP_WIN || instruction === CPU.OP_CHECKPOINT) {
+    if ((instruction === CPU.OP_WIN || instruction === CPU.OP_CHECKPOINT) && typeof puzzleAction !== 'undefined') {
       setCanBroadcast(true)
     }
     let newCpuHeap = ''
