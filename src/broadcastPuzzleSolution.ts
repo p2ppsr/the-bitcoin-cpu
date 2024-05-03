@@ -112,7 +112,7 @@ export default async (
 
     for (let i = 0; i < executedOperations.length - 1; i++) {
         const tx = Transaction.fromHex(currentTX.rawTx as string)
-        const parsedOfferTX = new bsv.Transaction(currentTX.rawTx)
+        const parsedPreviousTX = new bsv.Transaction(currentTX.rawTx)
         const lockingScript = tx.outputs[0].lockingScript.toHex()
         const cpu = CPU.fromLockingScript(lockingScript, {
             'heap': currentHeap,
@@ -136,7 +136,7 @@ export default async (
         const unlockingScript = await cpu.getUnlockingScript(async (self) => {
             const bsvtx = new bsv.Transaction()
             bsvtx.from({
-                txId: currentTX.txid,
+                txId: currentTX.txid as string,
                 outputIndex: 0,
                 script: lockingScript,
                 satoshis: tx.outputs[0].satoshis as number
@@ -146,9 +146,11 @@ export default async (
                 satoshis: tx.outputs[0].satoshis as number
             }))
             self.to = { tx: bsvtx, inputIndex: 0 }
-            self.from = { tx: parsedOfferTX, outputIndex: 0 }
+            self.from = { tx: parsedPreviousTX, outputIndex: 0 }
             executeRealInstruction(self, executedOperations[i].op, executedOperations[i].value as bigint)
         })
+        const newOutputAmount = tx.outputs[0].satoshis as number
+        // TODO: For BILL, PAY and other opcodes that change the amount needed in the UTXO, adjust newOutputAmount accordingly
         currentTX = await createAction({
             inputs: {
                 [currentTX.txid as string]: {
@@ -162,7 +164,7 @@ export default async (
             },
             outputs: [{
                 script: nextScript.toHex(),
-                satoshis: tx.outputs[0].satoshis as number,
+                satoshis: newOutputAmount,
                 basket: 'computation'
             }],
             description: `Step solving a puzzle`,
