@@ -3,7 +3,7 @@ import { HashedMap } from 'scrypt-ts'
 import CPU from './contracts/CPU.ts'
 import CPUArtifact from '../artifacts/CPU.json'
 CPU.loadArtifact(CPUArtifact)
-import { createAction, CreateActionResult } from '@babbage/sdk-ts'
+import { createAction, CreateActionResult, stampLogFormat } from '@babbage/sdk-ts'
 import { verifyTruthy, serializeHashedMap, deserializeHashedMap } from './utils.ts'
 import executeMockInstruction from './executeMockInstruction.ts'
 import broadcastPuzzleSolution from './broadcastPuzzleSolution.ts'
@@ -48,9 +48,11 @@ export default function App() {
       outputs: [{
         script,
         satoshis
-      }]
+      }],
+      log: ''
     }
     const action = await createAction(exportPuzzleParams)
+    if (action.log) { console.log('Debugger.tsx:55\n', stampLogFormat(action.log)) }
     const serializedHeap = serializeHashedMap(cpu.heap)
     const newPuzzleAction = {
       action,
@@ -67,7 +69,7 @@ export default function App() {
     const heap = deserializeHashedMap(parsed.serializedHeap)
     const emptyStack = new HashedMap<bigint, bigint>()
     const emptyCallStack = new HashedMap<bigint, bigint>()
-    const tx = Transaction.fromHex(parsed.action.rawTx)
+    const tx = Transaction.fromHex(verifyTruthy(parsed.action.rawTx))
     const lockingScript = tx.outputs[0].lockingScript.toHex()
     const newCpu = CPU.fromLockingScript(lockingScript, {
       'heap': heap,

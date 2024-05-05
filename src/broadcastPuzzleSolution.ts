@@ -1,7 +1,7 @@
 import CPU from './contracts/CPU'
 import executeRealInstruction from './executeRealInstruction'
 import executeMockInstruction from './executeMockInstruction.ts'
-import { createAction, getHeight, createSignature, getPublicKey, CreateActionResult } from '@babbage/sdk-ts'
+import { createAction, getHeight, createSignature, getPublicKey, CreateActionResult, stampLogFormat } from '@babbage/sdk-ts'
 import { PubKey, Sig, bsv, toByteString, HashedMap } from 'scrypt-ts'
 import { Transaction } from '@bsv/sdk'
 import { verifyTruthy, deserializeHashedMap } from './utils.ts'
@@ -21,7 +21,7 @@ export default async (
     const initialHeap = deserializeHashedMap(puzzleAction.serializedHeap)
     const emptyStack = new HashedMap<bigint, bigint>()
     const emptyCallStack = new HashedMap<bigint, bigint>()
-    const tx = Transaction.fromHex(puzzleAction.action.rawTx)
+    const tx = Transaction.fromHex(verifyTruthy(puzzleAction.action.rawTx))
     const parsedOfferTX = new bsv.Transaction(puzzleAction.action.rawTx)
     const lockingScript = tx.outputs[0].lockingScript.toHex()
     const cpu = CPU.fromLockingScript(lockingScript, {
@@ -45,7 +45,7 @@ export default async (
     const unlockingScript = await cpu.getUnlockingScript(async (self) => {
         const bsvtx = new bsv.Transaction()
         bsvtx.from({
-            txId: puzzleAction.action.txid,
+            txId: verifyTruthy(puzzleAction.action.txid),
             outputIndex: 0,
             script: lockingScript,
             satoshis: tx.outputs[0].satoshis as number
@@ -86,8 +86,9 @@ export default async (
     })
     const broadcastActionParams = {
         inputs: {
-            [puzzleAction.action.txid]: {
+            [verifyTruthy(puzzleAction.action.txid)]: {
                 ...verifyTruthy(puzzleAction.action),
+                rawTx: verifyTruthy(puzzleAction.action.rawTx),
                 outputsToRedeem: [{
                     index: 0,
                     unlockingScript: unlockingScript.toHex()
@@ -100,9 +101,11 @@ export default async (
             basket: 'computation'
         }],
         description: `Start solving a puzzle`,
-        acceptDelayedBroadcast: false
+        acceptDelayedBroadcast: false,
+        log: ''
     }
     let currentTX = await createAction(broadcastActionParams)
+    if (currentTX.log) { console.log('broadcastPuzzleSolution.ts:108\n',stampLogFormat(currentTX.log)) }
     let currentHeap = cpu.heap
     let currentStack = cpu.stack
     let currentInitialHeap = cpu.initialHeap
@@ -168,8 +171,10 @@ export default async (
                 basket: 'computation'
             }],
             description: `Step solving a puzzle`,
-            acceptDelayedBroadcast: false
+            acceptDelayedBroadcast: false,
+            log: ''
         })
+        if (currentTX.log) { console.log('broadcastPuzzleSolution.ts:177\n',stampLogFormat(currentTX.log)) }
         currentHeap = cpu.heap
         currentStack = cpu.stack
         currentInitialHeap = cpu.initialHeap
@@ -201,7 +206,7 @@ export default async (
         self.from = { tx: parsedPreWinTX, outputIndex: 0 }
         self.win(CPU.OP_WIN)
     })
-    await createAction({
+    const finalAction = await createAction({
         inputs: {
             [currentTX.txid as string]: {
                 ...verifyTruthy(currentTX),
@@ -210,10 +215,12 @@ export default async (
                     index: 0,
                     unlockingScript: winScript.toHex()
                 }]
-            }
+            },
         },
         description: `Finish solving a puzzle`,
-        acceptDelayedBroadcast: false
+        acceptDelayedBroadcast: false,
+        log: ''
     })
+    if (finalAction.log) console.log('broadcastPuzzleSolution:224\n', stampLogFormat(finalAction.log))
     alert('CPU Puzzle is Solved and Unlocked! The bounty is returned to your MetaNet Client.')
 }

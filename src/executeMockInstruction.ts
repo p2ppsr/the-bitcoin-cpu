@@ -1,5 +1,6 @@
 import CPU from './contracts/CPU'
 import { fromByteString, int2ByteString, byteString2Int, toByteString } from 'scrypt-ts'
+import { verifyTruthy } from './utils'
 
 export default (cpu: CPU, instruction: bigint, overrideValue?: bigint, isMockingRealSend = false): { cpu: CPU, value?: bigint | undefined } => {
     let value: bigint | undefined = undefined
@@ -85,7 +86,7 @@ export default (cpu: CPU, instruction: bigint, overrideValue?: bigint, isMocking
                 }
                 value = typeof overrideValue !== 'undefined' ? overrideValue : inputValue
             } else {
-                inputValue = overrideValue
+                inputValue = verifyTruthy(overrideValue)
             }
             cpu.readHelper(inputValue)
             break
