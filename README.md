@@ -324,4 +324,6 @@ In closing, Bitcoin was always as Turing complete as any existing machine. Trans
 
 # License
 
-The code in this repository is proprietary. No license or permission is given to anyone for its use.
+The license for the code in this repository is the Open BSV License.
+
+Feel free to use it, but only on the Bitcoin SV blockchain, as defined by the BSV Association.
