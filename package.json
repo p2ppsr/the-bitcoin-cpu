@@ -14,7 +14,7 @@
     "@babbage/react-prompt": "^0.2.20",
     "@babbage/sdk-ts": "^0.2.47",
     "@babbage/tokenator": "^0.2.34",
-    "@bsv/sdk": "^1.1.12",
+    "@bsv/sdk": "^1.1.13",
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
     "@mui/material": "^5.15.10",
